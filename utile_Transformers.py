@@ -673,7 +673,7 @@ def make_image_with_pairs(rec, freq_integrated_signals, noisy_rec ,disc,square, 
                                      lambda_disc=disc, lambda_square=square,
                                      pola= pola)
     ground_clean_image, trace, pairs = create_pairs(clean_image.numpy(), n_pairs)
-    return noisy_image.unsqueeze(0), torch.tensor(ground_clean_image).unsqueeze(0),  torch.tensor(trace).unsqueeze(0), pairs
+    return noisy_image.unsqueeze(0), torch.tensor(ground_clean_image).unsqueeze(0),  torch.tensor(trace).float().unsqueeze(0), pairs
 
 def make_batch_with_pairs(batch_size, freq_integrated_signals, rec, noisy_rec,
                                 disc, square=0.001, pola=[0], n_pairs=1):
