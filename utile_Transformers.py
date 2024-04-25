@@ -673,7 +673,7 @@ def make_image_with_pairs(rec, freq_integrated_signals, noisy_rec ,disc,square, 
                                      lambda_disc=disc, lambda_square=square,
                                      pola= pola)
     ground_clean_image, trace, pairs = create_pairs(clean_image.numpy(), n_pairs)
-    return noisy_image.unsqueeze(0), torch.tensor(ground_clean_image).unsqueeze(0),  torch.tensor(trace).float().unsqueeze(0), pairs
+    return noisy_image.unsqueeze(0), torch.tensor(ground_clean_image).unsqueeze(0),  torch.tensor(trace).unsqueeze(0), pairs
 
 def make_batch_with_pairs(batch_size, freq_integrated_signals, rec, noisy_rec,
                                 disc, square=0.001, pola=[0], n_pairs=1):
@@ -689,9 +689,9 @@ def make_batch_with_pairs(batch_size, freq_integrated_signals, rec, noisy_rec,
         traces.append(trace)
         pairs_list.append(pairs)
 
-    ground_clean_images=torch.cat(ground_clean_images, dim = 0)
-    noisy_images=torch.cat(noisy_images, dim = 0)
-    traces=torch.cat(traces, dim = 0)
+    ground_clean_images=torch.cat(ground_clean_images, dim = 0).float()
+    noisy_images=torch.cat(noisy_images, dim = 0).float()
+    traces=torch.cat(traces, dim = 0).float()
 
     return ground_clean_images, noisy_images, traces, pairs_list
 
@@ -788,7 +788,7 @@ def gen_image_with_pairs(batch_size, n_pairs, n_points):
     pairs_list = pairs_list2pairs_batch(pairs_list, size = 64.)
     partial_target = extract_random_points(ground_clean_images, n_points)
 
-    return ground_clean_images, partial_target, noisy_images, traces, pairs_list
+    return ground_clean_images, partial_target, noisy_images, traces.float(), pairs_list
 
 
 #####################################################################################################
