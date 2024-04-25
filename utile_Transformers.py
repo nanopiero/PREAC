@@ -730,7 +730,7 @@ def extract_random_points(images, M):
 
     return result
 
-def set_tensor_values(X, extracted_data, S):
+def set_tensor_values(X, extracted_data, S=64):
     """
     Set values in tensor X using coordinates and values extracted from another tensor.
 
