@@ -426,6 +426,69 @@ def generate_noise_and_pairs(image, lambda_pairs=0.01, lambda_rec=0.001,
 
     return image
 
+#####################################################################################################
+###################################### Tracé nuage de points ########################################
+
+def plot_triplets(triplets):
+    # Convert triplets to a transposed list for easier plotting
+    triplets_transposed = list(zip(*triplets))
+
+    # Extracting the row indices, column indices, and values
+    row_indices = triplets_transposed[0]
+    col_indices = triplets_transposed[1]
+    values = triplets_transposed[2]
+
+    # Creating the plot
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+
+    # Plotting the points
+    scatter = ax.scatter(row_indices, col_indices, values, c=values, cmap='viridis', marker='o')
+
+    ax.view_init(elev=90, azim=0)
+    # Adding labels and title
+    ax.set_xlabel('Row Index')
+    ax.set_ylabel('Column Index')
+    ax.set_zlabel('Value')
+    plt.title('3D Scatter Plot of Triplets')
+
+    # Adding a color bar
+    cbar = fig.colorbar(scatter, shrink=0.5, aspect=5)
+    cbar.set_label('Values')
+
+    plt.show()
+
+# Assuming 'triplets' is your list of triplets from the previous function
+# You would call the function like this:
+# plot_triplets(triplets)
+
+
+def plot_triplets_orthogonal_projection(triplets):
+    # Convert triplets to a transposed list for easier plotting
+    triplets_transposed = list(zip(*triplets))
+
+    # Extracting the row indices and column indices
+    row_indices = triplets_transposed[0]
+    col_indices = triplets_transposed[1]
+    # values = triplets_transposed[2]  # Unused for orthogonal XY projection
+
+    # Creating the plot
+    plt.figure(figsize=(8, 6))
+
+    # Plotting the points on XY plane
+    plt.scatter(row_indices, col_indices, c='blue', marker='o')
+
+    # Adding labels and title
+    plt.xlabel('Row Index')
+    plt.ylabel('Column Index')
+    plt.title('Orthogonal Projection onto XY Plane')
+    plt.grid(True)
+
+    plt.show()
+
+# Assuming 'triplets' is your list of triplets from the previous function
+# You would call the function like this:
+# plot_triplets_orthogonal_projection(triplets)
 
 #####################################################################################################
 ###################################### Fusion & CML (needs numba) ###################################
@@ -790,6 +853,105 @@ def gen_image_with_pairs(batch_size, n_pairs, n_points):
 
     return ground_clean_images, partial_target, noisy_images, traces.float(), pairs_list
 
+#####################################################################################################
+#################################### Passage PointCloud #############################################
+
+def get_random_triplets(tensor, N, M): # N : max non zero elements M: total elements
+    # Find indices of non-zero elements
+    non_zero_indices = torch.nonzero(tensor, as_tuple=True)
+    row_indices, col_indices = non_zero_indices
+
+    # Extract corresponding non-zero values
+    values = tensor[non_zero_indices]
+
+    # Create triplets for non-zero elements
+    non_zero_triplets = torch.stack((row_indices, col_indices, values), dim=1)
+
+    # Shuffle the non-zero triplets
+    shuffle_indices = torch.randperm(non_zero_triplets.size(0))
+    shuffled_non_zero_triplets = non_zero_triplets[shuffle_indices]
+
+    # Determine the number of non-zero triplets
+    K = shuffled_non_zero_triplets.size(0)
+
+    if K > N :
+      shuffled_non_zero_triplets = shuffled_non_zero_triplets[:N]
+    # print(shuffled_non_zero_triplets.size(0))
+    # Find zero values to potentially add
+    zero_indices = torch.nonzero(tensor == 0, as_tuple=True)
+    zero_row_indices, zero_col_indices = zero_indices
+
+    # Create zero triplets
+    zero_triplets = torch.stack((zero_row_indices, zero_col_indices, 0 * zero_col_indices), dim=1)
+
+    # Shuffle zero triplets
+    shuffle_indices_zero = torch.randperm(zero_triplets.size(0))
+    shuffled_zero_triplets = zero_triplets[shuffle_indices_zero]
+
+    # Subsample N-K zero triplets
+    # L = shuffled_zero_triplets.size(0)
+    subsampled_zero_triplets = shuffled_zero_triplets[:(M - N)]
+    # print('nnn', subsampled_zero_triplets.size(0))
+    # Combine non-zero and zero triplets
+    final_triplets = torch.cat((shuffled_non_zero_triplets, subsampled_zero_triplets), dim=0)
+
+
+    return final_triplets.unsqueeze(dim=0)
+
+
+def get_random_xy_triplets(x, y, N, M): # N : max non zero elements M: total elements
+    # Find indices of non-zero elements
+    non_zero_indices = torch.nonzero(x, as_tuple=True)
+    row_indices, col_indices = non_zero_indices
+
+    # Extract corresponding non-zero values
+    valuesx = x[non_zero_indices]
+    valuesy = y[non_zero_indices]
+
+    # Create triplets for non-zero elements
+    non_zero_triplets_x = torch.stack((row_indices, col_indices, valuesx), dim=1)
+    non_zero_triplets_y = torch.stack((row_indices, col_indices, valuesy), dim=1)
+
+    # Shuffle the non-zero triplets
+    shuffle_indices = torch.randperm(non_zero_triplets_x.size(0))
+    shuffled_non_zero_triplets_x = non_zero_triplets_x[shuffle_indices]
+    shuffled_non_zero_triplets_y = non_zero_triplets_y[shuffle_indices]
+
+    # Determine the number of non-zero triplets
+    K = shuffled_non_zero_triplets_x.size(0)
+
+    if K > N :
+      shuffled_non_zero_triplets_x = shuffled_non_zero_triplets_x[:N]
+      shuffled_non_zero_triplets_y = shuffled_non_zero_triplets_y[:N]
+    K = min(K,N)
+
+    # Find zero values to potentially add
+    zero_indices = torch.nonzero(x == 0, as_tuple=True)
+    zero_row_indices, zero_col_indices = zero_indices
+
+    # Create zero triplets
+    zero_triplets_x = torch.stack((zero_row_indices, zero_col_indices, 0 * zero_col_indices), dim=1)
+    zero_triplets_y = torch.stack((zero_row_indices, zero_col_indices, y[zero_indices]), dim=1)
+
+    # Shuffle zero triplets
+    shuffle_indices_zero = torch.randperm(zero_triplets_x.size(0))
+    shuffled_zero_triplets_x = zero_triplets_x[shuffle_indices_zero]
+    shuffled_zero_triplets_y = zero_triplets_y[shuffle_indices_zero]
+
+    # Subsample N-K zero triplets
+    # L = shuffled_zero_triplets.size(0)
+    subsampled_zero_triplets_x = shuffled_zero_triplets_x[:(M - K)]
+    subsampled_zero_triplets_y = shuffled_zero_triplets_y[:(M - K)]
+    # print('nnn', subsampled_zero_triplets.size(0))
+    # Combine non-zero and zero triplets
+    final_triplets_x = torch.cat((shuffled_non_zero_triplets_x, subsampled_zero_triplets_x), dim=0)
+    final_triplets_y = torch.cat((shuffled_non_zero_triplets_y, subsampled_zero_triplets_y), dim=0)
+
+    return final_triplets_x, final_triplets_y
+
+
+#####################################################################################################
+####################################### 
 
 #####################################################################################################
 ###################################### Embedding ####################################################
@@ -1150,3 +1312,227 @@ class FusionTransformer(nn.Module):
         x = self.decoder(x)
 
         return x
+
+
+
+##############################################################################################
+########################### PointNet #########################################################
+
+# Code de base PointNet (3 d -> 2 d + intensité):
+
+# https://github.com/fxia22/pointnet.pytorch
+
+
+from __future__ import print_function
+import torch
+import torch.nn as nn
+import torch.nn.parallel
+import torch.utils.data
+from torch.autograd import Variable
+import numpy as np
+import torch.nn.functional as F
+
+
+class STN3d(nn.Module):
+    def __init__(self):
+        super(STN3d, self).__init__()
+        self.conv1 = torch.nn.Conv1d(3, 64, 1)
+        self.conv2 = torch.nn.Conv1d(64, 128, 1)
+        self.conv3 = torch.nn.Conv1d(128, 1024, 1)
+        self.fc1 = nn.Linear(1024, 512)
+        self.fc2 = nn.Linear(512, 256)
+        self.fc3 = nn.Linear(256, 9)
+        self.relu = nn.ReLU()
+
+        self.bn1 = nn.BatchNorm1d(64)
+        self.bn2 = nn.BatchNorm1d(128)
+        self.bn3 = nn.BatchNorm1d(1024)
+        self.bn4 = nn.BatchNorm1d(512)
+        self.bn5 = nn.BatchNorm1d(256)
+
+
+    def forward(self, x):
+        batchsize = x.size()[0]
+        x = F.relu(self.bn1(self.conv1(x)))
+        x = F.relu(self.bn2(self.conv2(x)))
+        x = F.relu(self.bn3(self.conv3(x)))
+        x = torch.max(x, 2, keepdim=True)[0]
+        x = x.view(-1, 1024)
+
+        x = F.relu(self.bn4(self.fc1(x)))
+        x = F.relu(self.bn5(self.fc2(x)))
+        x = self.fc3(x)
+
+        iden = Variable(torch.from_numpy(np.array([1,0,0,0,1,0,0,0,1]).astype(np.float32))).view(1,9).repeat(batchsize,1)
+        if x.is_cuda:
+            iden = iden.cuda()
+        x = x + iden
+        x = x.view(-1, 3, 3)
+        return x
+
+
+class STNkd(nn.Module):
+    def __init__(self, k=64):
+        super(STNkd, self).__init__()
+        self.conv1 = torch.nn.Conv1d(k, 64, 1)
+        self.conv2 = torch.nn.Conv1d(64, 128, 1)
+        self.conv3 = torch.nn.Conv1d(128, 1024, 1)
+        self.fc1 = nn.Linear(1024, 512)
+        self.fc2 = nn.Linear(512, 256)
+        self.fc3 = nn.Linear(256, k*k)
+        self.relu = nn.ReLU()
+
+        self.bn1 = nn.BatchNorm1d(64)
+        self.bn2 = nn.BatchNorm1d(128)
+        self.bn3 = nn.BatchNorm1d(1024)
+        self.bn4 = nn.BatchNorm1d(512)
+        self.bn5 = nn.BatchNorm1d(256)
+
+        self.k = k
+
+    def forward(self, x):
+        batchsize = x.size()[0]
+        x = F.relu(self.bn1(self.conv1(x)))
+        x = F.relu(self.bn2(self.conv2(x)))
+        x = F.relu(self.bn3(self.conv3(x)))
+        x = torch.max(x, 2, keepdim=True)[0]
+        x = x.view(-1, 1024)
+
+        x = F.relu(self.bn4(self.fc1(x)))
+        x = F.relu(self.bn5(self.fc2(x)))
+        x = self.fc3(x)
+
+        iden = Variable(torch.from_numpy(np.eye(self.k).flatten().astype(np.float32))).view(1,self.k*self.k).repeat(batchsize,1)
+        if x.is_cuda:
+            iden = iden.cuda()
+        x = x + iden
+        x = x.view(-1, self.k, self.k)
+        return x
+
+class PointNetfeat(nn.Module):
+    def __init__(self, global_feat = True, feature_transform = False):
+        super(PointNetfeat, self).__init__()
+        self.stn = STN3d()
+        self.conv1 = torch.nn.Conv1d(3, 64, 1)
+        self.conv2 = torch.nn.Conv1d(64, 128, 1)
+        self.conv3 = torch.nn.Conv1d(128, 1024, 1)
+        self.bn1 = nn.BatchNorm1d(64)
+        self.bn2 = nn.BatchNorm1d(128)
+        self.bn3 = nn.BatchNorm1d(1024)
+        self.global_feat = global_feat
+        self.feature_transform = feature_transform
+        if self.feature_transform:
+            self.fstn = STNkd(k=64)
+
+    def forward(self, x):
+        n_pts = x.size()[2]
+        trans = self.stn(x)
+        x = x.transpose(2, 1)
+        x = torch.bmm(x, trans)
+        x = x.transpose(2, 1)
+        x = F.relu(self.bn1(self.conv1(x)))
+
+        if self.feature_transform:
+            trans_feat = self.fstn(x)
+            x = x.transpose(2,1)
+            x = torch.bmm(x, trans_feat)
+            x = x.transpose(2,1)
+        else:
+            trans_feat = None
+
+        pointfeat = x
+        x = F.relu(self.bn2(self.conv2(x)))
+        x = self.bn3(self.conv3(x))
+        x = torch.max(x, 2, keepdim=True)[0]
+        x = x.view(-1, 1024)
+        if self.global_feat:
+            return x, trans, trans_feat
+        else:
+            x = x.view(-1, 1024, 1).repeat(1, 1, n_pts)
+            return torch.cat([x, pointfeat], 1), trans, trans_feat
+
+class PointNetCls(nn.Module):
+    def __init__(self, k=2, feature_transform=False):
+        super(PointNetCls, self).__init__()
+        self.feature_transform = feature_transform
+        self.feat = PointNetfeat(global_feat=True, feature_transform=feature_transform)
+        self.fc1 = nn.Linear(1024, 512)
+        self.fc2 = nn.Linear(512, 256)
+        self.fc3 = nn.Linear(256, k)
+        self.dropout = nn.Dropout(p=0.3)
+        self.bn1 = nn.BatchNorm1d(512)
+        self.bn2 = nn.BatchNorm1d(256)
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+        x, trans, trans_feat = self.feat(x)
+        x = F.relu(self.bn1(self.fc1(x)))
+        x = F.relu(self.bn2(self.dropout(self.fc2(x))))
+        x = self.fc3(x)
+        return F.log_softmax(x, dim=1), trans, trans_feat
+
+
+class PointNetDenseCls(nn.Module):
+    def __init__(self, k = 2, feature_transform=False):
+        super(PointNetDenseCls, self).__init__()
+        self.k = k
+        self.feature_transform=feature_transform
+        self.feat = PointNetfeat(global_feat=False, feature_transform=feature_transform)
+        self.conv1 = torch.nn.Conv1d(1088, 512, 1)
+        self.conv2 = torch.nn.Conv1d(512, 256, 1)
+        self.conv3 = torch.nn.Conv1d(256, 128, 1)
+        self.conv4 = torch.nn.Conv1d(128, self.k, 1)
+        self.bn1 = nn.BatchNorm1d(512)
+        self.bn2 = nn.BatchNorm1d(256)
+        self.bn3 = nn.BatchNorm1d(128)
+
+    def forward(self, x):
+        batchsize = x.size()[0]
+        n_pts = x.size()[2]
+        x, trans, trans_feat = self.feat(x)
+        x = F.relu(self.bn1(self.conv1(x)))
+        x = F.relu(self.bn2(self.conv2(x)))
+        x = F.relu(self.bn3(self.conv3(x)))
+        x = self.conv4(x)
+        x = x.transpose(2,1).contiguous()
+        x = F.log_softmax(x.view(-1,self.k), dim=-1)
+        x = x.view(batchsize, n_pts, self.k)
+        return x, trans, trans_feat
+
+def feature_transform_regularizer(trans):
+    d = trans.size()[1]
+    batchsize = trans.size()[0]
+    I = torch.eye(d)[None, :, :]
+    if trans.is_cuda:
+        I = I.cuda()
+    loss = torch.mean(torch.norm(torch.bmm(trans, trans.transpose(2,1)) - I, dim=(1,2)))
+    return loss
+
+if __name__ == '__main__':
+    sim_data = Variable(torch.rand(32,3,2500))
+    trans = STN3d()
+    out = trans(sim_data)
+    print('stn', out.size())
+    print('loss', feature_transform_regularizer(out))
+
+    sim_data_64d = Variable(torch.rand(32, 64, 2500))
+    trans = STNkd(k=64)
+    out = trans(sim_data_64d)
+    print('stn64d', out.size())
+    print('loss', feature_transform_regularizer(out))
+
+    pointfeat = PointNetfeat(global_feat=True)
+    out, _, _ = pointfeat(sim_data)
+    print('global feat', out.size())
+
+    pointfeat = PointNetfeat(global_feat=False)
+    out, _, _ = pointfeat(sim_data)
+    print('point feat', out.size())
+
+    cls = PointNetCls(k = 5)
+    out, _, _ = cls(sim_data)
+    print('class', out.size())
+
+    seg = PointNetDenseCls(k = 3)
+    out, _, _ = seg(sim_data)
+    print('seg', out.size())
