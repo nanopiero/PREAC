@@ -353,8 +353,8 @@ def gen_image_with_integrated_signals(batch_size, p):
 
 
 def gen_pointnet(n, N, M):
-  x = make_batch(n, rec = 0., noisy_rec= 0., disc = 0.0005)
-  y =  make_batch(n, rec = 0.001, noisy_rec= 0., disc = 0.)
+  x = make_batch(n, rec = 0.001, noisy_rec= 0., disc = 0.)
+  y = make_batch(n, rec = 0., noisy_rec= 0., disc = 0.0005)
   x = x + y
   y = (y > 0).long()
 
