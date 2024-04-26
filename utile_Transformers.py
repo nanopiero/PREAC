@@ -346,10 +346,37 @@ def gen_image_with_integrated_signals(batch_size, p):
     return full_target, partial_target, integrated_signals
 
 
+#def gen_pointnet(n):
+#  target = make_batch(n, rec = 0., noisy_rec= 0., disc = 0.0005)
+#  noise =  make_batch(n, rec = 0.001, noisy_rec= 0., disc = 0.)
+#  return  target + noise, target     #bruit additif trivial
+
+
 def gen_pointnet(n):
-  target = make_batch(n, rec = 0., noisy_rec= 0., disc = 0.0005)
-  noise =  make_batch(n, rec = 0.001, noisy_rec= 0., disc = 0.)
-  return  target + noise, target     #bruit additif trivial
+  x = make_batch(n, rec = 0., noisy_rec= 0., disc = 0.0005)
+  y =  make_batch(n, rec = 0.001, noisy_rec= 0., disc = 0.)
+  x = x + y
+  y = (y > 0).long()
+
+  # points
+  xis = []
+  yis = []
+  for i in range(x.shape[0]):
+    xi, yi = get_random_xy_triplets(x[i].squeeze(0), y[i].squeeze(0), N, M)
+    xis.append(xi.unsqueeze(0))
+    yis.append(yi.unsqueeze(0))
+  ux = torch.transpose(torch.cat(xis, dim=0),1,2)
+  # ux[:,2] += torch.rand(1).cuda()
+  uy = torch.transpose(torch.cat(yis, dim=0),1,2)
+
+  # Normalisation / réduction de y:
+  ux[:,:2,:] /= 64
+  uy = uy[:,2,:]
+  xy = torch.cat((ux[:,:2,:], uy.unsqueeze(1)), dim=1)
+
+  return  x, y, ux, uy, xy   
+
+
 
 def generate_noise(image, lambda_rec=0.001 ,lambda_noisy_rec = 0.001, lambda_disc = 0.001, lambda_square = 0., pola=[0,0.5,0.1]):
     for k in range(np.random.poisson(lambda_disc*64*64)):
